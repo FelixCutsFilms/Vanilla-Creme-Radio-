@@ -276,7 +276,7 @@ function wireAudioEvents(el, isDj) {
 wireAudioEvents(audio, false);
 wireAudioEvents(audioDj, true);
 
-$('mini-play').addEventListener('click', togglePlay);
+$('mini-play').addEventListener('click', e => { e.stopPropagation(); togglePlay(); });
 $('np-play').addEventListener('click', togglePlay);
 $('np-prev').addEventListener('click', prevStation);
 $('np-next').addEventListener('click', nextStation);

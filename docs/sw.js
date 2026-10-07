@@ -3,7 +3,7 @@
  * (cross-origin) werden NIE abgefangen oder gecacht — sie laufen immer
  * direkt übers Netz, damit Live-Streams und die Radio-Browser-API
  * unangetastet bleiben. */
-const CACHE = 'vcr-shell-v1';
+const CACHE = 'vcr-shell-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -44,17 +44,15 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Statische Assets: Cache zuerst, sonst Netzwerk (und nachcachen).
+  // Statische Assets: Netzwerk zuerst (damit Updates sofort ankommen),
+  // offline auf den Cache zurückfallen.
   e.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((res) => {
-        if (res && res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
-        }
-        return res;
-      });
-    })
+    fetch(req).then((res) => {
+      if (res && res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy));
+      }
+      return res;
+    }).catch(() => caches.match(req))
   );
 });
