@@ -271,10 +271,13 @@ function wireAudioEvents(el, isDj) {
   el.addEventListener('error',   () => {
     if (isDj !== isDjMode) return;
     playing = false; updatePlayBtn();
+    // Fehlercode des Browsers mit anzeigen, damit sich die Ursache eingrenzen lässt:
+    // 2 = Netzwerk/Server, 3 = Dekodierung, 4 = Format/Adresse nicht unterstützt oder blockiert
+    const code = el.error ? el.error.code : '?';
     if (el.dataset.upgraded === '1') {
-      setStatus('error', 'Sender nur über HTTP — im Browser nicht abspielbar');
+      setStatus('error', `Sender nur über HTTP — nicht abspielbar (Code ${code})`);
     } else {
-      setStatus('error', 'Fehler beim Laden');
+      setStatus('error', `Fehler beim Laden (Code ${code})`);
     }
   });
 }
