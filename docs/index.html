@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Vanilla Creme Radio</title>
+  <meta name="description" content="Minimalistischer Radio-Player — eigene Sender, weltweite Entdeckung." />
+  <meta name="theme-color" content="#EAE6D4" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Creme Radio" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ── App Bar ── -->
+  <div class="app-bar">
+    <div class="brand">
+      <div class="label">Vanilla Creme</div>
+      <h1>Radio</h1>
+    </div>
+    <button class="icon-btn" id="add-open" title="Sender hinzufügen" aria-label="Sender hinzufügen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </div>
+
+  <!-- ── Views ── -->
+  <div class="views">
+
+    <!-- Tab: Meine Sender -->
+    <section class="tab-page active" id="tab-mine">
+      <div class="filter-bar">
+        <label>Genre</label>
+        <select class="pill" id="genre-filter"></select>
+      </div>
+      <div class="station-list" id="station-list"></div>
+    </section>
+
+    <!-- Tab: Entdecken -->
+    <section class="tab-page" id="tab-discover">
+      <div class="discover-filters">
+        <div class="chips" id="genre-chips"></div>
+        <div class="d-row">
+          <select id="f-country"><option value="">🌍 Alle Länder</option></select>
+          <select id="f-djgenre" style="display:none"></select>
+        </div>
+        <div class="d-row">
+          <input id="f-network" placeholder="Sender / Netzwerk suchen…" />
+          <button class="btn-primary" id="search-btn">Suchen</button>
+        </div>
+        <div class="hint" id="dj-hint" style="display:none">via hearthis.at — Genre wählen oder DJ suchen</div>
+        <div class="status" id="discover-status"></div>
+      </div>
+      <div class="station-list" id="discover-list"></div>
+      <div class="attribution">
+        Senderdaten von <a href="https://www.radio-browser.info" target="_blank" rel="noopener">radio-browser.info</a> · CC BY 4.0
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ── Now Bar (Mini Player) ── -->
+  <div class="now-bar" id="now-bar">
+    <div class="np-info">
+      <div class="np-name" id="np-name">Kein Sender</div>
+      <div class="np-status" id="np-status">–</div>
+    </div>
+    <button class="play-btn" id="mini-play" aria-label="Play/Pause">
+      <svg id="mini-icon" viewBox="0 0 16 16"><polygon points="4,2 14,8 4,14"/></svg>
+    </button>
+  </div>
+
+  <!-- ── Tab Bar ── -->
+  <nav class="tabbar">
+    <button class="tab-btn active" data-tab="mine">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      Meine Sender
+    </button>
+    <button class="tab-btn" data-tab="discover">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      Entdecken
+    </button>
+  </nav>
+
+  <!-- ── Add / Edit Sheet ── -->
+  <div class="sheet-backdrop" id="backdrop"></div>
+
+  <div class="sheet" id="add-sheet">
+    <div class="sheet-grip"></div>
+    <h2 id="add-title">Sender hinzufügen</h2>
+    <form id="add-form" autocomplete="off">
+      <div class="field">
+        <label class="field-label">Name</label>
+        <input name="name" placeholder="Sendername" required />
+      </div>
+      <div class="field">
+        <label class="field-label">Stream-URL</label>
+        <input name="url" placeholder="https://…" inputmode="url" required />
+      </div>
+      <div class="field">
+        <label class="field-label">Genre</label>
+        <select name="genre" id="add-genre"></select>
+      </div>
+      <div class="field">
+        <label class="field-label">Neues Genre (optional)</label>
+        <input name="newgenre" placeholder="z. B. Jazz, Techno, News…" />
+      </div>
+      <div class="sheet-actions">
+        <button type="button" class="btn-ghost" id="add-cancel">Abbrechen</button>
+        <button type="submit" class="btn-primary" id="add-submit">Hinzufügen</button>
+      </div>
+      <div class="sheet-actions" id="edit-delete-row" style="display:none;margin-top:10px">
+        <button type="button" class="btn-ghost btn-danger" id="edit-delete" style="flex:1">Sender löschen</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── Now Playing Sheet ── -->
+  <div class="sheet" id="now-sheet">
+    <div class="sheet-grip"></div>
+    <img class="np-sheet-art" id="np-art" src="icons/icon-512.png" alt="" />
+    <div class="np-sheet-title" id="np-sheet-title">Kein Sender</div>
+    <div class="np-sheet-genre" id="np-sheet-genre"></div>
+    <div class="np-sheet-status" id="np-sheet-status">–</div>
+    <div class="np-controls">
+      <button class="np-ctrl" id="np-prev" aria-label="Vorheriger Sender">
+        <svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg>
+      </button>
+      <button class="np-ctrl main" id="np-play" aria-label="Play/Pause">
+        <svg id="np-play-icon" viewBox="0 0 16 16"><polygon points="4,2 14,8 4,14"/></svg>
+      </button>
+      <button class="np-ctrl" id="np-next" aria-label="Nächster Sender">
+        <svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5l11 7L4 19z"/></svg>
+      </button>
+    </div>
+    <div class="vol-row">
+      <svg viewBox="0 0 24 24"><path d="M4 9h3l4-3v12l-4-3H4z"/></svg>
+      <input type="range" class="vol" id="volume" min="0" max="1" step="0.02" value="0.8" />
+      <svg viewBox="0 0 24 24"><path d="M4 9h3l4-3v12l-4-3H4z"/><path d="M15 8a4 4 0 0 1 0 8" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+    </div>
+    <div class="vol-note" id="vol-note"></div>
+  </div>
+
+  <!-- iOS Install Hint -->
+  <div class="install-hint" id="install-hint">
+    <div>Tippe auf <b>Teilen</b> &nbsp;↑&nbsp; und dann <b>„Zum Home-Bildschirm"</b>, um Creme Radio wie eine App zu installieren.</div>
+    <button class="ih-close" id="ih-close" aria-label="Schließen">×</button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- Audio -->
+  <audio id="audio" preload="none" playsinline></audio>
+  <audio id="audio-dj" preload="none" playsinline></audio>
+
+  <script src="app.js"></script>
+</body>
+</html>
