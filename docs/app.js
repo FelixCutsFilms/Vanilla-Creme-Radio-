@@ -167,13 +167,18 @@ function applyVolume() {
   audioDj.volume = v;
 }
 
+const PAGE_IS_HTTPS = location.protocol === 'https:';
+
 function playUrl(el, url) {
-  // Mixed-Content-Vorwarnung: http-Stream auf https-Seite wird vom Browser geblockt.
-  if (location.protocol === 'https:' && /^http:\/\//i.test(url)) {
-    setStatus('error', 'HTTP-Stream — im Browser blockiert');
+  // Auf einer HTTPS-Seite blockiert der Browser http-Streams (Mixed Content).
+  // Deshalb zuerst die https-Variante derselben Adresse versuchen.
+  if (PAGE_IS_HTTPS && /^http:\/\//i.test(url)) {
+    url = url.replace(/^http:/i, 'https:');
+    el.dataset.upgraded = '1';
   } else {
-    setStatus('loading', 'Verbinde…');
+    delete el.dataset.upgraded;
   }
+  setStatus('loading', 'Verbinde…');
   el.src = url;
   applyVolume();
   const p = el.play();
@@ -266,8 +271,8 @@ function wireAudioEvents(el, isDj) {
   el.addEventListener('error',   () => {
     if (isDj !== isDjMode) return;
     playing = false; updatePlayBtn();
-    if (location.protocol === 'https:' && /^http:\/\//i.test(currentUrl)) {
-      setStatus('error', 'HTTP-Stream — vom Browser blockiert');
+    if (el.dataset.upgraded === '1') {
+      setStatus('error', 'Sender nur über HTTP — im Browser nicht abspielbar');
     } else {
       setStatus('error', 'Fehler beim Laden');
     }
@@ -628,6 +633,8 @@ async function searchStations() {
   const country = $('f-country').value;
   const isTop = activeDiscoverTag === '__top__';
   const params = new URLSearchParams({ hidebroken: 'true', order: 'votes', reverse: 'true', limit: '80' });
+  // Nur Sender, die über HTTPS senden — alles andere blockiert der Browser.
+  if (PAGE_IS_HTTPS) params.set('is_https', 'true');
   if (country) params.set('countrycode', country);
   if (activeDiscoverTag && !isTop) params.set('tag', activeDiscoverTag);
   if (network) params.set('name', network);
@@ -650,7 +657,8 @@ function renderDiscoverList(results) {
 
   results.forEach(r => {
     if (!r.url_resolved && !r.url) return;
-    const url = r.url_resolved || r.url;
+    const cands = [r.url_resolved, r.url].filter(Boolean);
+    const url = cands.find(u => /^https:/i.test(u)) || cands[0];
     const genreLabel = GENRES.find(g => g.tag === activeDiscoverTag)?.label
       || (r.tags ? r.tags.split(',')[0].trim() : '');
     const isActive = currentStreamUrl === url;
