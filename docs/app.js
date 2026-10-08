@@ -55,8 +55,8 @@ const volumeEl = $('volume');
 
 /* ── State ── */
 const DEFAULT_STATIONS = [
-  { name: 'SomaFM Groove Salad', url: 'https://ice2.somafm.com/groovesalad-128-mp3', genre: 'Ambient' },
-  { name: 'SomaFM Beat Blender', url: 'https://ice2.somafm.com/beatblender-128-mp3', genre: 'Electronic' },
+  { name: 'SomaFM Groove Salad', url: 'https://ice.somafm.com/groovesalad', genre: 'Ambient' },
+  { name: 'SomaFM Beat Blender', url: 'https://ice.somafm.com/beatblender', genre: 'Electronic' },
   { name: 'DLF Nova',            url: 'https://st03.sslstream.dlf.de/dlf/03/128/mp3/stream.mp3', genre: 'News' },
 ];
 const DEFAULT_GENRES = ['Electronic','Techno','Jazz','Klassik','News','Pop','Rock','Ambient','Sonstige'];
@@ -87,6 +87,15 @@ function loadData() {
     genres = [...DEFAULT_GENRES];
   }
   stations.forEach(st => { if (st.genre && !genres.includes(st.genre)) genres.push(st.genre); });
+
+  // Alte, nicht funktionierende SomaFM-Adressen früherer Versionen korrigieren.
+  const FIXES = {
+    'https://ice2.somafm.com/groovesalad-128-mp3': 'https://ice.somafm.com/groovesalad',
+    'https://ice2.somafm.com/beatblender-128-mp3': 'https://ice.somafm.com/beatblender',
+  };
+  let changed = false;
+  stations.forEach(st => { if (FIXES[st.url]) { st.url = FIXES[st.url]; changed = true; } });
+  if (changed) saveData();
 }
 function saveData() {
   try {
