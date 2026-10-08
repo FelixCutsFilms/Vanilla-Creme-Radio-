@@ -180,18 +180,34 @@ function applyVolume() {
 
 const PAGE_IS_HTTPS = location.protocol === 'https:';
 
-function playUrl(el, url) {
-  // Auf einer HTTPS-Seite blockiert der Browser http-Streams (Mixed Content).
-  // Deshalb zuerst die https-Variante derselben Adresse versuchen.
-  if (PAGE_IS_HTTPS && /^http:\/\//i.test(url)) {
-    url = url.replace(/^http:/i, 'https:');
-    el.dataset.upgraded = '1';
-  } else {
-    delete el.dataset.upgraded;
-  }
+// Playlist-Dateien (.pls/.m3u) kann ein Audio-Element nicht abspielen.
+const isPlaylist = (u) => /\.(pls|m3u)(\?|$)/i.test(u);
+
+// Liste der Adressen, die nacheinander versucht werden. Bei http-Adressen auf
+// einer HTTPS-Seite zuerst die https-Variante, dann das Original (Chrome kann
+// Audio-Streams teils selbst sicher umleiten).
+function streamCandidates(urls) {
+  const out = [];
+  const add = (u) => { if (u && !out.includes(u)) out.push(u); };
+  urls.filter(Boolean).filter(u => !isPlaylist(u)).forEach(u => {
+    if (PAGE_IS_HTTPS && /^http:\/\//i.test(u)) add(u.replace(/^http:/i, 'https:'));
+    add(u);
+  });
+  if (!out.length) urls.filter(Boolean).forEach(add);
+  return out;
+}
+
+function playUrl(el, urls) {
+  el._cands = streamCandidates(Array.isArray(urls) ? urls : [urls]);
+  el._candIdx = 0;
   setStatus('loading', 'Verbinde…');
+  tryCandidate(el);
+}
+
+function tryCandidate(el) {
+  const url = el._cands[el._candIdx];
   const urlEl = $('np-url');
-  urlEl.textContent = url;
+  urlEl.textContent = url + (el._cands.length > 1 ? `  (Versuch ${el._candIdx + 1}/${el._cands.length})` : '');
   urlEl.href = url;
   el.src = url;
   applyVolume();
@@ -220,14 +236,14 @@ function selectStation(i) {
   renderMyList();
 }
 
-function playExternal(name, url, tag) {
+function playExternal(name, url, tag, allUrls) {
   isDjMode = false; currentDjIsLive = false;
   stopOther(audio);
   currentIdx = -1;
   currentStreamUrl = url;
   currentUrl = url;
   setNowPlaying(name, tag);
-  playUrl(audio, url);
+  playUrl(audio, allUrls || [url]);
   playing = true;
   updatePlayBtn();
   renderMyList();
@@ -284,12 +300,18 @@ function wireAudioEvents(el, isDj) {
   el.addEventListener('pause',   () => { if (isDj === isDjMode) { playing = false; updatePlayBtn(); if (npStatus.textContent !== 'Pausiert' && !npStatus.className.includes('error')) setStatus('', 'Pausiert'); } });
   el.addEventListener('error',   () => {
     if (isDj !== isDjMode) return;
+    // Nächste Adresse probieren, falls vorhanden.
+    if (el._cands && el._candIdx < el._cands.length - 1) {
+      el._candIdx++;
+      tryCandidate(el);
+      return;
+    }
     playing = false; updatePlayBtn();
     // Fehlercode des Browsers mit anzeigen, damit sich die Ursache eingrenzen lässt:
     // 2 = Netzwerk/Server, 3 = Dekodierung, 4 = Format/Adresse nicht unterstützt oder blockiert
     const code = el.error ? el.error.code : '?';
-    if (el.dataset.upgraded === '1') {
-      setStatus('error', `Sender nur über HTTP — nicht abspielbar (Code ${code})`);
+    if (PAGE_IS_HTTPS && el._cands && el._cands.every(u => /^http:/i.test(u) || el._cands.includes(u.replace(/^https:/i, 'http:')))) {
+      setStatus('error', `Sender nur über HTTP — im Browser nicht abspielbar (Code ${code})`);
     } else {
       setStatus('error', `Fehler beim Laden (Code ${code})`);
     }
@@ -674,8 +696,9 @@ function renderDiscoverList(results) {
 
   results.forEach(r => {
     if (!r.url_resolved && !r.url) return;
-    const cands = [r.url_resolved, r.url].filter(Boolean);
-    const url = cands.find(u => /^https:/i.test(u)) || cands[0];
+    // url_resolved ist die echte Stream-Adresse; url ist oft nur eine Playlist (.pls/.m3u).
+    const rawUrls = [r.url_resolved, r.url].filter(Boolean);
+    const url = rawUrls.find(u => !isPlaylist(u)) || rawUrls[0];
     // Bei „Alle"/„Top" kein Chip-Label anzeigen, sondern das erste Tag des Senders.
     const chipLabel = activeDiscoverTag && activeDiscoverTag !== '__top__'
       ? GENRES.find(g => g.tag === activeDiscoverTag)?.label : '';
@@ -695,7 +718,7 @@ function renderDiscoverList(results) {
       </button>`;
     div.addEventListener('click', e => {
       if (e.target.closest('.row-action')) return;
-      playExternal(r.name, url, genreLabel);
+      playExternal(r.name, url, genreLabel, rawUrls);
       document.querySelectorAll('#discover-list .station').forEach(el => el.classList.remove('active'));
       div.classList.add('active');
     });
@@ -845,7 +868,7 @@ if ('serviceWorker' in navigator) {
 }
 
 /* ── Init ── */
-const APP_VERSION = '8';
+const APP_VERSION = '9';
 $('app-version').textContent = 'Version ' + APP_VERSION;
 loadData();
 renderGenreBar();
