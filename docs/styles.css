@@ -275,6 +275,7 @@ select.pill:focus { border-color: var(--accent2); }
 }
 .np-sheet-title { font-size: 20px; font-weight: 700; text-transform: uppercase; text-align: center; color: var(--text); line-height: 1.25; }
 .np-sheet-genre { font-size: 13px; color: var(--text3); text-align: center; margin-top: 4px; }
+.np-sheet-track { font-size: 14px; font-style: italic; color: var(--text2); text-align: center; margin-top: 8px; min-height: 1em; }
 .np-sheet-status { font-size: 12px; text-align: center; margin-top: 10px; color: var(--text3); }
 .np-sheet-status.playing { color: var(--accent); }
 .np-sheet-status.error { color: var(--red); }

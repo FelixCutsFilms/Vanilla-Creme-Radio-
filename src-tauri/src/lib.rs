@@ -1,10 +1,13 @@
 use futures_util::StreamExt;
+// Tray-Icon, Menüs und Fenstersteuerung gibt es nur auf dem Desktop.
+#[cfg(desktop)]
 use tauri::{
     menu::{Menu, MenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, Runtime,
 };
 
+#[cfg(desktop)]
 fn show_window<R: Runtime>(app: &tauri::AppHandle<R>) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.show();
@@ -12,6 +15,7 @@ fn show_window<R: Runtime>(app: &tauri::AppHandle<R>) {
     }
 }
 
+#[cfg(desktop)]
 fn emit<R: Runtime>(app: &tauri::AppHandle<R>, event: &str, payload: &str) {
     let _ = app.emit(event, payload.to_string());
 }
@@ -183,58 +187,66 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![fetch_icy_metadata, resolve_stream_url, fetch_hearthis, fetch_radio])
-        .setup(|app| {
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Regular);
-
-            let icon = app.default_window_icon().unwrap().clone();
-
-            let play   = MenuItem::with_id(app, "play",   "Spielen",         true, None::<&str>)?;
-            let pause  = MenuItem::with_id(app, "pause",  "Pause",           true, None::<&str>)?;
-            let next   = MenuItem::with_id(app, "next",   "Nächster Sender", true, None::<&str>)?;
-
-            let vol25  = MenuItem::with_id(app, "vol25",  "25 %",  true, None::<&str>)?;
-            let vol50  = MenuItem::with_id(app, "vol50",  "50 %",  true, None::<&str>)?;
-            let vol75  = MenuItem::with_id(app, "vol75",  "75 %",  true, None::<&str>)?;
-            let vol100 = MenuItem::with_id(app, "vol100", "100 %", true, None::<&str>)?;
-            let volume = Submenu::with_id_and_items(app, "volume", "Lautstärke", true, &[&vol25, &vol50, &vol75, &vol100])?;
-
-            let sep  = tauri::menu::PredefinedMenuItem::separator(app)?;
-            let show = MenuItem::with_id(app, "show", "Fenster öffnen", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Beenden",        true, None::<&str>)?;
-
-            let menu = Menu::with_items(app, &[&play, &pause, &next, &volume, &sep, &show, &quit])?;
-
-            TrayIconBuilder::new()
-                .icon(icon)
-                .menu(&menu)
-                .tooltip("Vanilla Creme Radio")
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "play"   => emit(app, "tray-play",   ""),
-                    "pause"  => emit(app, "tray-pause",  ""),
-                    "next"   => emit(app, "tray-next",   ""),
-                    "vol25"  => emit(app, "tray-volume", "0.25"),
-                    "vol50"  => emit(app, "tray-volume", "0.5"),
-                    "vol75"  => emit(app, "tray-volume", "0.75"),
-                    "vol100" => emit(app, "tray-volume", "1.0"),
-                    "show"   => show_window(app),
-                    "quit"   => app.exit(0),
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        show_window(tray.app_handle());
-                    }
-                })
-                .build(app)?;
-
+        .setup(|_app| {
+            #[cfg(desktop)]
+            setup_tray(_app)?;
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Menüleisten-Icon mit Play/Pause/Weiter/Lautstärke (nur Desktop).
+#[cfg(desktop)]
+fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(target_os = "macos")]
+    app.set_activation_policy(tauri::ActivationPolicy::Regular);
+
+    let icon = app.default_window_icon().unwrap().clone();
+
+    let play   = MenuItem::with_id(app, "play",   "Spielen",         true, None::<&str>)?;
+    let pause  = MenuItem::with_id(app, "pause",  "Pause",           true, None::<&str>)?;
+    let next   = MenuItem::with_id(app, "next",   "Nächster Sender", true, None::<&str>)?;
+
+    let vol25  = MenuItem::with_id(app, "vol25",  "25 %",  true, None::<&str>)?;
+    let vol50  = MenuItem::with_id(app, "vol50",  "50 %",  true, None::<&str>)?;
+    let vol75  = MenuItem::with_id(app, "vol75",  "75 %",  true, None::<&str>)?;
+    let vol100 = MenuItem::with_id(app, "vol100", "100 %", true, None::<&str>)?;
+    let volume = Submenu::with_id_and_items(app, "volume", "Lautstärke", true, &[&vol25, &vol50, &vol75, &vol100])?;
+
+    let sep  = tauri::menu::PredefinedMenuItem::separator(app)?;
+    let show = MenuItem::with_id(app, "show", "Fenster öffnen", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Beenden",        true, None::<&str>)?;
+
+    let menu = Menu::with_items(app, &[&play, &pause, &next, &volume, &sep, &show, &quit])?;
+
+    TrayIconBuilder::new()
+        .icon(icon)
+        .menu(&menu)
+        .tooltip("Vanilla Creme Radio")
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "play"   => emit(app, "tray-play",   ""),
+            "pause"  => emit(app, "tray-pause",  ""),
+            "next"   => emit(app, "tray-next",   ""),
+            "vol25"  => emit(app, "tray-volume", "0.25"),
+            "vol50"  => emit(app, "tray-volume", "0.5"),
+            "vol75"  => emit(app, "tray-volume", "0.75"),
+            "vol100" => emit(app, "tray-volume", "1.0"),
+            "show"   => show_window(app),
+            "quit"   => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_window(tray.app_handle());
+            }
+        })
+        .build(app)?;
+
+    Ok(())
 }

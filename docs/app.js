@@ -18,7 +18,12 @@ const MIRRORS = [
   'https://fi1.api.radio-browser.info',
 ];
 
+// In der Android-/Desktop-App (Tauri) laufen Netzwerkanfragen über Rust —
+// ohne CORS-, Mixed-Content- und Referer-Beschränkungen des Browsers.
+const TAURI = window.__TAURI__ && window.__TAURI__.core;
+
 async function radioApi(path) {
+  if (TAURI) return JSON.parse(await TAURI.invoke('fetch_radio', { path }));
   let lastErr = 'keine Mirrors erreichbar';
   for (const base of MIRRORS) {
     try {
@@ -31,6 +36,7 @@ async function radioApi(path) {
 }
 
 async function hearthisApi(path) {
+  if (TAURI) return JSON.parse(await TAURI.invoke('fetch_hearthis', { path }));
   // hearthis.at liefert gelegentlich leere 200er — mehrfach versuchen.
   let lastErr = 'leere Antwort';
   for (let i = 0; i < 4; i++) {
@@ -118,6 +124,7 @@ const npName       = $('np-name');
 const npStatus     = $('np-status');
 const npSheetTitle = $('np-sheet-title');
 const npSheetGenre = $('np-sheet-genre');
+const npSheetTrack = $('np-sheet-track');
 const npSheetStatus= $('np-sheet-status');
 const nowBar       = $('now-bar');
 
@@ -197,7 +204,38 @@ function streamCandidates(urls) {
   return out;
 }
 
+/* ── Laufender Titel (ICY-Metadaten, nur in der App über Rust) ── */
+let metaTimer = null, metaUrl = '', currentTrack = '';
+function showTrack(t) {
+  currentTrack = t || '';
+  npSheetTrack.textContent = currentTrack;
+  if (playing && npStatus.className.includes('playing')) {
+    setStatus('playing', currentTrack ? '● ' + currentTrack : '● Live');
+  }
+}
+async function fetchTrack(url) {
+  try {
+    const t = await TAURI.invoke('fetch_icy_metadata', { url });
+    if (url === metaUrl) showTrack(t);
+  } catch (e) {
+    if (url === metaUrl) showTrack('');
+  }
+}
+function startMetaPoll(url) {
+  if (!TAURI || url === metaUrl) return;
+  stopMetaPoll();
+  metaUrl = url;
+  fetchTrack(url);
+  metaTimer = setInterval(() => fetchTrack(url), 30000);
+}
+function stopMetaPoll() {
+  clearInterval(metaTimer);
+  metaTimer = null; metaUrl = '';
+  showTrack('');
+}
+
 function playUrl(el, urls) {
+  stopMetaPoll();
   el._cands = streamCandidates(Array.isArray(urls) ? urls : [urls]);
   el._candIdx = 0;
   setStatus('loading', 'Verbinde…');
@@ -263,6 +301,7 @@ function playDj(name, url, genre, isLive) {
 }
 
 function stopPlayback() {
+  stopMetaPoll();
   (isDjMode ? audioDj : audio).pause();
   playing = false;
   updatePlayBtn();
@@ -293,8 +332,13 @@ function prevStation() { if (stations.length) selectStation((currentIdx - 1 + st
 function wireAudioEvents(el, isDj) {
   el.addEventListener('playing', () => {
     if (isDj !== isDjMode) return;
-    setStatus('playing', isDj ? (currentDjIsLive ? '● Live' : '▶ Läuft') : '● Live');
     playing = true; updatePlayBtn();
+    if (isDj) {
+      setStatus('playing', currentDjIsLive ? '● Live' : '▶ Läuft');
+    } else {
+      setStatus('playing', currentTrack ? '● ' + currentTrack : '● Live');
+      startMetaPoll(el.src);
+    }
   });
   el.addEventListener('waiting', () => { if (isDj === isDjMode) setStatus('loading', 'Puffert…'); });
   el.addEventListener('pause',   () => { if (isDj === isDjMode) { playing = false; updatePlayBtn(); if (npStatus.textContent !== 'Pausiert' && !npStatus.className.includes('error')) setStatus('', 'Pausiert'); } });
@@ -861,14 +905,15 @@ if (isIOS) {
 }
 
 /* ── Service Worker ── */
-if ('serviceWorker' in navigator) {
+// Service Worker nur im Browser (PWA) — in der App wird nichts offline gecacht.
+if ('serviceWorker' in navigator && !TAURI) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
 
 /* ── Init ── */
-const APP_VERSION = '9';
+const APP_VERSION = '10';
 $('app-version').textContent = 'Version ' + APP_VERSION;
 loadData();
 renderGenreBar();
