@@ -301,6 +301,9 @@ input[type=range].vol::-webkit-slider-thumb {
 input[type=range].vol::-moz-range-thumb { width: 20px; height: 20px; border: none; border-radius: 50%; background: var(--accent); }
 .vol-note { font-size: 11px; color: var(--text3); text-align: center; margin-top: 10px; }
 
+.np-debug { margin-top: 16px; text-align: center; font-size: 11px; color: var(--text3); line-height: 1.6; }
+.np-debug a { color: var(--text2); word-break: break-all; }
+
 /* Install hint (iOS) */
 .install-hint {
   position: fixed; left: 12px; right: 12px; bottom: calc(12px + var(--safe-bottom)); z-index: 70;

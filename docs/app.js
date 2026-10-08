@@ -188,6 +188,9 @@ function playUrl(el, url) {
     delete el.dataset.upgraded;
   }
   setStatus('loading', 'Verbinde…');
+  const urlEl = $('np-url');
+  urlEl.textContent = url;
+  urlEl.href = url;
   el.src = url;
   applyVolume();
   const p = el.play();
@@ -838,6 +841,8 @@ if ('serviceWorker' in navigator) {
 }
 
 /* ── Init ── */
+const APP_VERSION = '6';
+$('app-version').textContent = 'Version ' + APP_VERSION;
 loadData();
 renderGenreBar();
 renderMyList();
