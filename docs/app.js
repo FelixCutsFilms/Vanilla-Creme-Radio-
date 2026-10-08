@@ -674,8 +674,10 @@ function renderDiscoverList(results) {
     if (!r.url_resolved && !r.url) return;
     const cands = [r.url_resolved, r.url].filter(Boolean);
     const url = cands.find(u => /^https:/i.test(u)) || cands[0];
-    const genreLabel = GENRES.find(g => g.tag === activeDiscoverTag)?.label
-      || (r.tags ? r.tags.split(',')[0].trim() : '');
+    // Bei „Alle"/„Top" kein Chip-Label anzeigen, sondern das erste Tag des Senders.
+    const chipLabel = activeDiscoverTag && activeDiscoverTag !== '__top__'
+      ? GENRES.find(g => g.tag === activeDiscoverTag)?.label : '';
+    const genreLabel = chipLabel || (r.tags ? r.tags.split(',')[0].trim() : '');
     const isActive = currentStreamUrl === url;
 
     const div = document.createElement('div');
@@ -841,7 +843,7 @@ if ('serviceWorker' in navigator) {
 }
 
 /* ── Init ── */
-const APP_VERSION = '6';
+const APP_VERSION = '7';
 $('app-version').textContent = 'Version ' + APP_VERSION;
 loadData();
 renderGenreBar();
