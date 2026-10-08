@@ -20,12 +20,19 @@ Alle Schritte laufen auf dem Mac im Terminal, im Projektordner
    - NDK (Side by side)
 5. **Apply** → herunterladen lassen.
 
-## 2. Umgebungsvariablen setzen
+## 2. Java 21 und Umgebungsvariablen
+
+Die Android-Buildwerkzeuge (Gradle) laufen zuverlässig mit **Java 21**. Neuere
+Versionen (z. B. Java 25) brechen mit „Unsupported class file major version 69" ab.
+
+```bash
+brew install --cask temurin@21
+```
 
 Diese Zeilen ans Ende von `~/.zshrc` anhängen (z. B. mit `open -e ~/.zshrc`):
 
 ```bash
-export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
 export ANDROID_HOME="$HOME/Library/Android/sdk"
 export NDK_HOME="$ANDROID_HOME/ndk/$(ls -1 $ANDROID_HOME/ndk | tail -1)"
 ```
