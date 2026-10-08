@@ -6,6 +6,7 @@
   <title>Vanilla Creme Radio</title>
   <meta name="description" content="Minimalistischer Radio-Player — eigene Sender, weltweite Entdeckung." />
   <meta name="theme-color" content="#EAE6D4" />
+  <meta name="referrer" content="no-referrer" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -158,8 +159,8 @@
   <div class="toast" id="toast"></div>
 
   <!-- Audio -->
-  <audio id="audio" preload="none" playsinline></audio>
-  <audio id="audio-dj" preload="none" playsinline></audio>
+  <audio id="audio" preload="none" playsinline referrerpolicy="no-referrer"></audio>
+  <audio id="audio-dj" preload="none" playsinline referrerpolicy="no-referrer"></audio>
 
   <script src="app.js"></script>
 </body>
