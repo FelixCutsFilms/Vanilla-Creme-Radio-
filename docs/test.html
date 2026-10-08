@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Stream-Test</title>
+  <style>
+    body { font-family: -apple-system, Roboto, sans-serif; background: #EAE6D4; color: #0d0d0d; margin: 0; padding: 16px; font-size: 14px; }
+    h1 { font-size: 18px; margin: 0 0 12px; }
+    select, input, button { font-size: 15px; padding: 10px; border-radius: 8px; border: 1px solid #C8C3B0; width: 100%; box-sizing: border-box; margin-bottom: 8px; background: #E0DBCA; }
+    button { background: #84739C; color: #EAE6D4; border: none; font-weight: 600; }
+    button.alt { background: #E0DBCA; color: #84739C; border: 1px solid #C8C3B0; }
+    #out { background: #fff; border-radius: 8px; padding: 10px; font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; min-height: 120px; }
+    .ok { color: #1a7f37; } .bad { color: #b42318; }
+  </style>
+</head>
+<body>
+  <h1>Stream-Test</h1>
+  <select id="preset">
+    <option value="https://st03.sslstream.dlf.de/dlf/03/128/mp3/stream.mp3">DLF Nova</option>
+    <option value="https://ice.somafm.com/groovesalad-128-mp3">SomaFM Groove Salad</option>
+    <option value="https://ice2.somafm.com/groovesalad-128-mp3">SomaFM Groove Salad (ice2)</option>
+  </select>
+  <input id="url" />
+  <button id="run">Test starten</button>
+  <button id="stop" class="alt">Ton stoppen</button>
+  <button id="unreg" class="alt">Service Worker entfernen (dann Seite neu laden)</button>
+  <div id="out"></div>
+
+<script>
+const out = document.getElementById('out');
+const urlIn = document.getElementById('url');
+const preset = document.getElementById('preset');
+urlIn.value = preset.value;
+preset.onchange = () => { urlIn.value = preset.value; };
+
+const players = [];
+function log(msg, cls) {
+  const s = document.createElement('div');
+  if (cls) s.className = cls;
+  s.textContent = msg;
+  out.appendChild(s);
+}
+const ERR = { 1: 'abgebrochen', 2: 'Netzwerk', 3: 'Dekodierung', 4: 'nicht unterstützt/blockiert' };
+
+// Spielt die Adresse mit einem Audio-Element und wartet bis zu 8 s auf Ton oder Fehler.
+function tryAudio(label, el, url) {
+  return new Promise(resolve => {
+    players.push(el);
+    let done = false;
+    const finish = (ok, msg) => {
+      if (done) return; done = true;
+      log(`${ok ? '✓' : '✗'} ${label}: ${msg}`, ok ? 'ok' : 'bad');
+      el.pause(); el.removeAttribute('src'); el.load();
+      resolve();
+    };
+    el.addEventListener('playing', () => finish(true, 'spielt'));
+    el.addEventListener('error', () => {
+      const e = el.error;
+      finish(false, `Code ${e ? e.code : '?'} (${e ? ERR[e.code] : '?'})${e && e.message ? ' – ' + e.message : ''}`);
+    });
+    setTimeout(() => finish(false, 'Zeitüberschreitung (8 s, weder Ton noch Fehler)'), 8000);
+    el.src = url;
+    const p = el.play();
+    if (p && p.catch) p.catch(err => finish(false, `play() abgelehnt: ${err.name} – ${err.message}`));
+  });
+}
+
+async function tryFetch(label, url, opts) {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(url, { ...opts, signal: ctrl.signal });
+    clearTimeout(t);
+    if (res.type === 'opaque') log(`✓ ${label}: Server erreichbar (Antwort nicht lesbar, normal)`, 'ok');
+    else log(`✓ ${label}: HTTP ${res.status}, Typ ${res.headers.get('content-type')}`, 'ok');
+    ctrl.abort();
+  } catch (e) {
+    log(`✗ ${label}: ${e.name} – ${e.message}`, 'bad');
+  }
+}
+
+document.getElementById('run').onclick = async () => {
+  out.textContent = '';
+  const url = urlIn.value.trim();
+  log('Gerät: ' + navigator.userAgent);
+  log('Service Worker aktiv: ' + (navigator.serviceWorker && navigator.serviceWorker.controller ? 'ja' : 'nein'));
+  log('Adresse: ' + url);
+  log('—');
+
+  // Test 1 MUSS direkt im Tipp starten, sonst blockiert der Browser die Wiedergabe.
+  const a1 = document.createElement('audio');
+  a1.setAttribute('referrerpolicy', 'no-referrer');
+  document.body.appendChild(a1);
+  await tryAudio('1 Audio-Element im Dokument', a1, url);
+
+  log('(Tests 2–5 starten nicht mehr direkt im Tipp — ein „play() abgelehnt" dort ist normal)');
+  await tryAudio('2 new Audio() frei', new Audio(), url);
+
+  const a3 = document.createElement('audio');
+  a3.preload = 'auto';
+  document.body.appendChild(a3);
+  await tryAudio('3 Audio mit preload=auto', a3, url);
+
+  await tryFetch('4 fetch no-cors', url, { mode: 'no-cors', referrerPolicy: 'no-referrer' });
+  await tryFetch('5 fetch cors', url, { mode: 'cors', referrerPolicy: 'no-referrer' });
+  log('— fertig. Bitte Screenshot schicken.');
+};
+
+document.getElementById('stop').onclick = () => players.forEach(p => { try { p.pause(); } catch (e) {} });
+
+document.getElementById('unreg').onclick = async () => {
+  if (!navigator.serviceWorker) { log('Kein Service Worker verfügbar'); return; }
+  const regs = await navigator.serviceWorker.getRegistrations();
+  for (const r of regs) await r.unregister();
+  log(`${regs.length} Service Worker entfernt. Jetzt Seite neu laden und Test wiederholen.`);
+};
+</script>
+</body>
+</html>
