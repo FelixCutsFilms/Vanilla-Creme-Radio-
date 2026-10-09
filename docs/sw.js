@@ -3,7 +3,7 @@
  * (cross-origin) werden NIE abgefangen oder gecacht — sie laufen immer
  * direkt übers Netz, damit Live-Streams und die Radio-Browser-API
  * unangetastet bleiben. */
-const CACHE = 'vcr-shell-v8';
+const CACHE = 'vcr-shell-v9';
 const ASSETS = [
   './',
   './index.html',

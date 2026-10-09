@@ -86,6 +86,10 @@ fragt einmalig, ob Installationen aus dieser Quelle erlaubt sind.
   ausführen, das schreibt direkt ins Android-Projekt.
 - **Play Store:** Dafür braucht es später einen signierten Release-Build
   (`npm run tauri android build -- --aab`) mit eigenem Signaturschlüssel.
-- **Noch nicht umgesetzt:** Wiedergabe im Hintergrund bei gesperrtem
-  Bildschirm und Steuerung über die Benachrichtigung. Ob der Ton beim
-  Verlassen der App weiterläuft, bitte testen.
+- **Nativer Player:** Auf Android spielt nicht der Webplayer, sondern Media3/
+  ExoPlayer als Hintergrunddienst (`PlaybackService.kt`, `RadioPlayerPlugin.kt`
+  in `src-tauri/gen/android/app/src/main/java/com/felixh/vanillacremeradio/`).
+  Er spielt bei gesperrtem Bildschirm weiter, zeigt Steuerung in Benachrichtigung
+  und Sperrbildschirm und liest den Songtitel aus demselben Stream.
+- **Android-Projekt nicht neu erzeugen:** `src-tauri/gen/android` enthält diese
+  eigenen Dateien. Ein erneutes `tauri android init` würde sie überschreiben.

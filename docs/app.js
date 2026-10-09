@@ -21,6 +21,8 @@ const MIRRORS = [
 // In der Android-/Desktop-App (Tauri) laufen Netzwerkanfragen über Rust —
 // ohne CORS-, Mixed-Content- und Referer-Beschränkungen des Browsers.
 const TAURI = window.__TAURI__ && window.__TAURI__.core;
+// In der Android-App spielt ein nativer Player (Media3/ExoPlayer) statt des Webplayers.
+const NATIVE = !!TAURI && /Android/i.test(navigator.userAgent);
 
 async function radioApi(path) {
   if (TAURI) return JSON.parse(await TAURI.invoke('fetch_radio', { path }));
@@ -238,7 +240,71 @@ function stopMetaPoll() {
   showTrack('');
 }
 
+/* ── Nativer Android-Player ── */
+let nativeCands = [], nativeIdx = 0, nativePollTimer = null, nativeWantPlay = false, nativeStartedAt = 0;
+// Direkt nach play/resume meldet der Player kurz noch den alten Zustand.
+const NATIVE_GRACE_MS = 2500;
+
+function nativeCall(action, payload) {
+  return TAURI.invoke('native_player', { action, payload: payload || {} });
+}
+function nativePlay(cands) {
+  nativeCands = cands;
+  nativeIdx = 0;
+  nativeWantPlay = true;
+  nativeStart();
+  startNativePoll();
+}
+function nativeStart() {
+  nativeStartedAt = Date.now();
+  const url = nativeCands[nativeIdx];
+  const urlEl = $('np-url');
+  urlEl.textContent = url + (nativeCands.length > 1 ? `  (Versuch ${nativeIdx + 1}/${nativeCands.length})` : '');
+  urlEl.href = url;
+  setStatus('loading', 'Verbinde…');
+  nativeCall('play', { url, title: npName.textContent, artist: npSheetGenre.textContent || 'Vanilla Creme Radio' })
+    .catch(e => setStatus('error', 'Player-Fehler: ' + e));
+}
+function startNativePoll() {
+  if (!nativePollTimer) nativePollTimer = setInterval(pollNative, 1000);
+}
+async function pollNative() {
+  let s;
+  try { s = await nativeCall('status'); } catch (e) { return; }
+  if (!s) return;
+  if (s.state === 'playing') {
+    playing = true;
+    currentTrack = s.title || '';
+    npSheetTrack.textContent = currentTrack;
+    setStatus('playing', currentTrack ? '● ' + currentTrack : '● Live');
+  } else if (s.state === 'buffering') {
+    playing = true;
+    setStatus('loading', 'Puffert…');
+  } else if (Date.now() - nativeStartedAt < NATIVE_GRACE_MS) {
+    // Schonfrist: Zustand ist noch nicht aktuell.
+  } else if (s.state === 'ended' && nativeWantPlay) {
+    // Server hat die Verbindung beendet — Live-Radio einfach neu verbinden.
+    nativeStart();
+  } else if (s.state === 'error' && nativeWantPlay) {
+    if (nativeIdx < nativeCands.length - 1) { nativeIdx++; nativeStart(); return; }
+    nativeWantPlay = false;
+    playing = false;
+    setStatus('error', `Fehler beim Laden (${s.error || 'unbekannt'})`);
+  } else if (s.state === 'paused') {
+    // Auch über Benachrichtigung/Sperrbildschirm pausiert.
+    nativeWantPlay = false;
+    playing = false;
+    if (!npStatus.className.includes('error')) setStatus('', 'Pausiert');
+  }
+  updatePlayBtn();
+}
+
 function playUrl(el, urls) {
+  if (NATIVE) {
+    stopMetaPoll();
+    nativePlay(streamCandidates(Array.isArray(urls) ? urls : [urls]));
+    return;
+  }
   stopMetaPoll();
   el._cands = streamCandidates(Array.isArray(urls) ? urls : [urls]);
   el._candIdx = 0;
@@ -306,6 +372,14 @@ function playDj(name, url, genre, isLive) {
 
 function stopPlayback() {
   stopMetaPoll();
+  if (NATIVE) {
+    nativeWantPlay = false;
+    nativeCall('pause').catch(() => {});
+    playing = false;
+    updatePlayBtn();
+    setStatus('', 'Pausiert');
+    return;
+  }
   (isDjMode ? audioDj : audio).pause();
   playing = false;
   updatePlayBtn();
@@ -314,6 +388,20 @@ function stopPlayback() {
 function startPlayback() {
   if (!currentUrl) {
     if (stations.length) selectStation(currentIdx >= 0 ? currentIdx : 0);
+    return;
+  }
+  if (NATIVE) {
+    if (nativeCands.length) {
+      nativeWantPlay = true;
+      nativeStartedAt = Date.now();
+      setStatus('loading', 'Verbinde…');
+      nativeCall('resume').catch(() => {});
+      startNativePoll();
+    } else {
+      nativePlay(streamCandidates([currentUrl]));
+    }
+    playing = true;
+    updatePlayBtn();
     return;
   }
   const el = isDjMode ? audioDj : audio;
@@ -372,7 +460,10 @@ $('mini-play').addEventListener('click', e => { e.stopPropagation(); togglePlay(
 $('np-play').addEventListener('click', togglePlay);
 $('np-prev').addEventListener('click', prevStation);
 $('np-next').addEventListener('click', nextStation);
-volumeEl.addEventListener('input', applyVolume);
+volumeEl.addEventListener('input', () => {
+  if (NATIVE) nativeCall('setVolume', { volume: parseFloat(volumeEl.value) }).catch(() => {});
+  else applyVolume();
+});
 
 /* ── Tabs ── */
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -917,12 +1008,14 @@ if ('serviceWorker' in navigator && !TAURI) {
 }
 
 /* ── Init ── */
-const APP_VERSION = '11';
+const APP_VERSION = '12';
 $('app-version').textContent = 'Version ' + APP_VERSION;
 loadData();
 renderGenreBar();
 renderMyList();
-setupMediaSession();
+if (!NATIVE) setupMediaSession();
+// Läuft der native Player noch aus einer früheren Sitzung, Zustand übernehmen.
+if (NATIVE) startNativePoll();
 renderGenreChips();
 updateCountryList().then(searchStations);
 applyVolume();

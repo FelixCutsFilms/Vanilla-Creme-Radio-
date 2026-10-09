@@ -182,11 +182,53 @@ async fn fetch_icy_metadata(url: String) -> Result<String, String> {
     Err("kein Titel gefunden".to_string())
 }
 
+/// Handle auf den nativen Android-Player (Kotlin: RadioPlayerPlugin).
+#[cfg(target_os = "android")]
+struct NativePlayer(tauri::plugin::PluginHandle<tauri::Wry>);
+
+#[cfg(target_os = "android")]
+fn native_player_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    tauri::plugin::Builder::new("radioplayer")
+        .setup(|app, api| {
+            use tauri::Manager;
+            let handle = api.register_android_plugin("com.felixh.vanillacremeradio", "RadioPlayerPlugin")?;
+            app.manage(NativePlayer(handle));
+            Ok(())
+        })
+        .build()
+}
+
+/// Steuert den nativen Android-Player: play, pause, resume, stop, setVolume, status.
+#[tauri::command]
+async fn native_player(
+    app: tauri::AppHandle,
+    action: String,
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        let player = app.state::<NativePlayer>();
+        player
+            .0
+            .run_mobile_plugin_async::<serde_json::Value>(action, payload)
+            .await
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, action, payload);
+        Err("Der native Player gibt es nur auf Android".into())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![fetch_icy_metadata, resolve_stream_url, fetch_hearthis, fetch_radio])
+    let builder = tauri::Builder::default().plugin(tauri_plugin_opener::init());
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(native_player_plugin());
+    builder
+        .invoke_handler(tauri::generate_handler![fetch_icy_metadata, resolve_stream_url, fetch_hearthis, fetch_radio, native_player])
         .setup(|_app| {
             #[cfg(desktop)]
             setup_tray(_app)?;
