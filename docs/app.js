@@ -221,8 +221,12 @@ async function fetchTrack(url) {
     if (url === metaUrl) showTrack('');
   }
 }
+// Vorerst aus: Die Titelabfrage öffnet eine zweite Verbindung zum selben Stream.
+// Verdacht: Manche Server kappen dabei die Wiedergabe-Verbindung (Abbruch nach ~5 s).
+const ICY_ENABLED = false;
+
 function startMetaPoll(url) {
-  if (!TAURI || url === metaUrl) return;
+  if (!TAURI || !ICY_ENABLED || url === metaUrl) return;
   stopMetaPoll();
   metaUrl = url;
   fetchTrack(url);
@@ -913,7 +917,7 @@ if ('serviceWorker' in navigator && !TAURI) {
 }
 
 /* ── Init ── */
-const APP_VERSION = '10';
+const APP_VERSION = '11';
 $('app-version').textContent = 'Version ' + APP_VERSION;
 loadData();
 renderGenreBar();
